@@ -1,0 +1,19 @@
+[package]
+name = "block"
+version = "0.1.0"
+edition = "2021"
+
+[build]
+target = "wasm32-unknown-unknown"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+candid = "0.10"
+ic-cdk = "0.13"
+ic_principal = "0.1.1"
+ymath = { path = "../../../yllama.rs/ymath" }
+yllama = { path = "../../../yllama.rs/yllama" }
+anyhow = "1.0.86"
+half = { version = "2.4.1" }

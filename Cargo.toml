@@ -1,0 +1,9 @@
+[workspace]
+members = [
+    "src/yblock",
+    "src/cli"
+]
+resolver = "2"
+
+[patch.crates-io]
+tokenizers = { version = "0.19.1", path = "../tokenizers/tokenizers", default-features = false, features = ["unstable_wasm"] }

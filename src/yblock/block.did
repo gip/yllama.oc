@@ -1,0 +1,18 @@
+service : {
+    "model_block_forward": (nat32, vec float32, nat32) -> (vec float32);
+    "model_forward": (vec float32, nat32) -> (nat32);
+    "model_set_blocks": (vec principal) -> ();
+    "model_get_blocks": () -> (vec principal);
+
+    "tensor_load_matrix_from_row": (text, nat32, vec float32) -> ();
+    "tensor_load_matrix_from_row_fp16": (text, nat32, vec nat16) -> ();
+    "tensor_load_vector": (text, vec float32) -> ();
+    "tensor_get_row_matrix": (text, nat32) -> (vec float32) query;
+    "tensor_get_vector": (text) -> (vec float32) query;
+    "tensor_new_matrix": (text, nat32, nat32) -> ();
+    "tensor_new_vector": (text, nat32) -> ();
+    "tensor_list": () -> (vec record { text; vec nat32 }) query;
+    "tensor_delete" : (text) -> ();
+
+    "status": () -> (text) query;
+}

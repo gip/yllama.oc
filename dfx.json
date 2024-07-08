@@ -1,0 +1,49 @@
+{
+  "canisters": {
+    "yllama": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    
+    "yblock0": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock1": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock2": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock3": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock4": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock5": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock6": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock7": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+
+    "yblock8": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock9": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock10": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock11": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock12": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock13": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock14": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock15": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+
+    "yblock16": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock17": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock18": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock19": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock20": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock21": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock22": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock23": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+
+    "yblock24": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock25": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock26": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock27": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock28": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock29": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock30": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" },
+    "yblock31": { "candid": "src/yblock/block.did", "package": "block", "type": "rust" }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "output_env_file": ".env",
+  "version": 1
+}
