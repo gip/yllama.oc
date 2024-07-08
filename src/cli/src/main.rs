@@ -214,11 +214,23 @@ struct Args {
     #[arg(short, long)]
     block: usize,
 
+    #[arg(long, default_value_t = 0)]
+    pos: u32,
+
     #[arg(long)]
     canister_id: String,
 
     #[arg(long)]
     canister_url: String,
+
+    #[arg(long, default_value_t = false)]
+    create: bool,
+
+    #[arg(long, default_value_t = false)]
+    load: bool,
+
+    #[arg(long, default_value_t = false)]
+    forward: bool,
 }
 
 #[tokio::main]
@@ -229,13 +241,11 @@ async fn main() {
     let (_, _, gguf) = load_fast(&args.file).expect("GGUF file");
     let model = load_build(&args.file, gguf).expect("GGUF model");
 
-    let canister_id = args.canister_id; // "bkyz2-fmaaa-aaaaa-qaaaq-cai"; // Local
-    //let canister_id = "htqzs-pqaaa-aaaap-ahndq-cai"; // IC
+    let canister_id = args.canister_id;
     let canister_principal = Principal::from_text(canister_id).expect("canister principal");
 
     // Agent & Canister
-    let url = args.canister_url; // "http://127.0.0.1:4943/?canisterId=bkyz2-fmaaa-aaaaa-qaaaq-cai";
-    //let url = "https://htqzs-pqaaa-aaaap-ahndq-cai.raw.icp0.io/";
+    let url = args.canister_url;
     let transport = ReqwestTransport::create(&url).expect("transport");
     let identity = Secp256k1Identity::from_pem_file("./identity.pem").expect("identity");
     let mut agent = Agent::builder()
@@ -251,16 +261,19 @@ async fn main() {
         .expect("Canister");
 
     let block = args.block;
-    let pos: u32 = 0;
+    let pos: u32 = args.pos;
 
-    // block_new_tensors(&canister, block).await;
-    block_load_tensors(&canister,&model, block).await;
+    if args.create {
+        block_new_tensors(&canister, block).await;
+    }
+    if args.load {
+        block_load_tensors(&canister,&model, block).await;
+    }
 
-    let mut x: Vec<f32> = vec![0.4; EMBED as usize];
-    // model_forward(&canister, &mut x, pos).await;
-
-    //model_block_forward(&canister, 0,  &mut x, pos).await;
-    //dbg!(x);
+    if args.forward {
+        let mut x: Vec<f32> = vec![1.0; EMBED as usize];
+        model_forward(&canister, &mut x, pos).await;
+    }
 
     println!("done")
 }
