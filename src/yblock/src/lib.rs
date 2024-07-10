@@ -1,24 +1,69 @@
-use core::borrow;
 use std::ops::Deref;
 use std::{cell::RefCell, ops::DerefMut};
 use candid::Principal;
-use ic_cdk::caller;
+use candid::CandidType;
+use serde::Deserialize;
 use yllama::llama::*;
 use yllama::llm::*;
+use ymath::{matmul, rmsnorm, max};
 use ymath::tensor::*;
 use std::collections::HashMap;
 use half::f16;
+use tokenizers::tokenizer::Tokenizer;
 
 type YLlamaState<T> = HashMap<String, (Vec<u32>, RefCell<Vec<T>>)>;
+type YBytes = HashMap<String, Vec<u8>>;
 
 thread_local! {
     static BLOCKS: RefCell<Vec<Principal>> = RefCell::default();
     static STORE: RefCell<YLlamaState<f32>> = RefCell::default();
+    static BYTES: RefCell<YBytes> = RefCell::default();
 }
+
+#[derive(CandidType, Deserialize, Debug)]
+struct Descr {
+    name: String,
+    shape: Vec<u32>
+}
+
 
 #[ic_cdk::init]
 fn init() {
     // Pass
+}
+
+macro_rules! check_owner {
+    () => {
+        assert!(ic_cdk::api::is_controller(&ic_cdk::caller()), "Unauthorized");
+    }
+}
+
+#[ic_cdk::update]
+fn upload(name: String, new: bool, data: Vec<u8>) {
+    check_owner!();
+    BYTES.with(|store| {
+        let mut borrow = store.borrow_mut();
+        match borrow.get_mut(&name) {
+            None => {
+                assert!(new, "Object doesn't exists");
+                borrow.insert(name, data); },
+            Some(prev) => {
+                if new {
+                    borrow.insert(name, data);
+                } else {
+                    prev.extend_from_slice(&data);
+                }
+            }
+        }
+    });
+}
+
+#[ic_cdk::query]
+fn upload_list() -> Vec<Descr> {
+    BYTES.with(|store| {
+        let borrow = store.borrow();
+        borrow.iter().map(|(name, data)| Descr { name: name.to_string(), shape: vec![data.len() as u32] }).collect()
+    })
 }
 
 #[ic_cdk::query]
@@ -64,6 +109,7 @@ fn tensor_get_row_matrix(name: String, row: u32) -> Vec<f32> {
 
 #[ic_cdk::update]
 fn tensor_new_matrix(name: String, d0: u32, d1: u32) {
+    check_owner!();
     STORE.with(|store| {
         let mut borrow = store.borrow_mut();
         let len = (d0 * d1) as usize;
@@ -74,6 +120,7 @@ fn tensor_new_matrix(name: String, d0: u32, d1: u32) {
 
 #[ic_cdk::update]
 fn tensor_new_vector(name: String, d0: u32) {
+    check_owner!();
     STORE.with(|store| {
         let mut borrow = store.borrow_mut();
         let len = d0 as usize;
@@ -95,6 +142,7 @@ fn status() -> String {
 
 #[ic_cdk::update]
 fn tensor_delete(name: String) {
+    check_owner!();
     STORE.with(|store| {
         let mut borrow = store.borrow_mut();
         let borrow = borrow.deref_mut();
@@ -107,21 +155,25 @@ fn tensor_delete(name: String) {
 }
 
 #[ic_cdk::query]
-fn tensor_list() -> Vec<(String, Vec<u32>)> {
+fn tensor_list() -> Vec<Descr> {
     STORE.with(|store| {
         let borrow = store.borrow();
-        borrow.iter().map(|(k, v)| (k.clone(), v.0.clone())).collect()
+        borrow.iter().map(|(k, v)|
+            Descr { name: k.clone(),
+                    shape: v.0.clone() }).collect()
     })
 }
 
 #[ic_cdk::update]
 fn tensor_load_matrix_from_row_fp16(name: String, row: u32, weights: Vec<u16>) -> () {
+    check_owner!();
     let vec: Vec<f32> = weights.iter().map(|v| f16::from_bits(*v).to_f32() ).collect();
     tensor_load_matrix_from_row(name, row, vec);
 }
 
 #[ic_cdk::update]
 fn tensor_load_matrix_from_row(name: String, row: u32, weights: Vec<f32>) -> () {
+    check_owner!();
     let row = row as usize;
     STORE.with(|store| {
         let mut borrow = store.borrow_mut();
@@ -145,6 +197,7 @@ fn tensor_load_matrix_from_row(name: String, row: u32, weights: Vec<f32>) -> () 
 
 #[ic_cdk::update]
 fn tensor_load_vector(name: String, weights: Vec<f32>) -> () {
+    check_owner!();
     STORE.with(|store| {
         let mut borrow = store.borrow_mut();
         let borrow = borrow.deref_mut();
@@ -200,6 +253,7 @@ impl<'a, const RW: bool, const D0: usize, const D1: usize> Instantiable<ICP, (&'
 
 #[ic_cdk::update]
 async fn model_set_blocks(new_blocks: Vec<Principal>) {
+    check_owner!();
     BLOCKS.with(|blocks| {
         let mut borrow = blocks.borrow_mut();
         let borrow = borrow.deref_mut();
@@ -207,7 +261,7 @@ async fn model_set_blocks(new_blocks: Vec<Principal>) {
     });
 }
 
-#[ic_cdk::update]
+#[ic_cdk::query]
 async fn model_get_blocks() -> Vec<Principal> {
     BLOCKS.with(|blocks| {
         let borrow = blocks.borrow();
@@ -216,24 +270,83 @@ async fn model_get_blocks() -> Vec<Principal> {
     })
 }
 
+#[ic_cdk::query]
+async fn model_tokenize(input: String) -> Vec<u32> {
+    BYTES.with(|bytes| {
+        let borrow = bytes.borrow();
+        let tokenizer = borrow.get("tokenizer").expect("tokenizer data");
+        let tokenizer = Tokenizer::from_bytes(tokenizer).expect("tokenizer");
+        let tk: Vec<u32> = tokenizer.encode(input, false).expect("tokens").get_ids().iter().map(|t| *t).collect();
+        tk
+    })
+}
+
+#[ic_cdk::query]
+async fn model_decode(input: String) -> Vec<u32> {
+    BYTES.with(|bytes| {
+        let borrow = bytes.borrow();
+        let tokenizer = borrow.get("tokenizer").expect("tokenizer data");
+        let tokenizer = Tokenizer::from_bytes(tokenizer).expect("tokenizer");
+        let token: Vec<u32> = tokenizer.encode(input, false).expect("tokens").get_ids().iter().map(|t| *t).collect();
+        token
+    })
+}
+
 #[ic_cdk::update]
-async fn model_forward(x: Vec<f32>, pos: u32) -> Vec<f32> {
-    let mut xx: Vec<f32> = x;
+async fn model_logits(x: Vec<f32>) -> u32 {
+    check_owner!();
+    assert!(x.len() == EMBED);
+    STORE.with(|store| {
+        let mut borrow = store.borrow_mut();
+        let store = borrow.deref_mut();
+        let store = &*store;
+
+        let output_norm: Tensor<false, f32, V<EMBED>, S> = Instantiable::instantiate((store,  "output_norm.weight".to_string())).expect("output norm tensor");
+        let output: Tensor<false, f32, M<EMBED, VOCAB>, S> = Instantiable::instantiate((store,  "output.weight".to_string())).expect("output tensor");
+        let mut x2: Tensor<true, f32, V<EMBED>, S> = Instantiable::instantiate((store, "x2".to_string())).expect("x2 tensor");
+        let mut logits: Tensor<true, f32, V<VOCAB>, S> = Instantiable::instantiate((store, "logits".to_string())).expect("x2 tensor");
+        let x: Tensor<false, f32, V<EMBED>, VecStore<f32>> = Tensor { store: x };
+        rmsnorm(&mut x2, &x, &output_norm, 1e-5);
+        unsafe { matmul(&mut logits, &output, &x2) }
+        max(&logits).0 as u32
+    })
+}
+
+#[ic_cdk::update]
+async fn model_forward(token: u32, pos: u32) -> u32 {
+    check_owner!();
+    assert!(token < VOCAB as u32);
     let blocks = BLOCKS.with(|blocks| {
         let borrow = blocks.borrow();
         let borrow = borrow.deref();
         borrow.clone()
     });
+    let mut x = STORE.with(|store| {
+        let mut borrow = store.borrow_mut();
+        let store = borrow.deref_mut();
+        let store = &*store;
+        let token_embd: Tensor<false, f32, M<EMBED, VOCAB>, S> = Instantiable::instantiate((store,  "token_embd.weight".to_string())).expect("token_embd tensor");
+        let row = token_embd.row(token as usize);
+        let row = row.reader();
+        let mut x = vec![0.0; EMBED];
+        for i in 0..EMBED {
+            x[i] = row.get(i)
+        };
+        x
+    });
     for (i, block) in blocks.iter().enumerate() {
-        let (res,): (Vec<f32>,) = ic_cdk::call(*block, "model_block_forward", (i as u32, xx, pos)).await.expect("vector");
-        xx = res
+        if i > 0 {
+            let (res,): (Vec<f32>,) = ic_cdk::call(*block, "model_block_forward", (i as u32 - 1, x, pos)).await.expect("vector");
+            x = res
+        }
     };
-    xx
+    let (predicted,): (u32,) = ic_cdk::call(blocks[0], "model_logits", (x,)).await.expect("logits");
+    predicted
 }
 
 #[ic_cdk::update]
 async fn model_block_forward(i: u32, x: Vec<f32>, pos: u32) -> Vec<f32> {
-
+    check_owner!();
     let params = LlamaParams {
         block_count: 32,
         _context_length: 8192,
