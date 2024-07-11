@@ -9,7 +9,7 @@ use tokenizers::tokenizer::Tokenizer;
 use yllama::llama::*;
 use yllama::llm::*;
 use ymath::tensor::*;
-use ymath::{matmul, max, rmsnorm};
+use ymath::{Matmul, max, rmsnorm};
 
 type YLlamaState<T> = HashMap<String, (Vec<u32>, RefCell<Vec<T>>)>;
 type YBytes = HashMap<String, Vec<u8>>;
@@ -25,6 +25,13 @@ struct Descr {
     name: String,
     shape: Vec<u32>,
 }
+
+#[derive(CandidType, Deserialize, Debug)]
+struct Timing {
+    step: String,
+    time: u64,
+}
+
 
 #[ic_cdk::init]
 fn init() {
@@ -361,6 +368,7 @@ async fn model_decode(input: String) -> Vec<u32> {
 async fn model_logits(x: Vec<f32>) -> u32 {
     check_owner!();
     assert!(x.len() == EMBED);
+    
     STORE.with(|store| {
         let mut borrow = store.borrow_mut();
         let store = borrow.deref_mut();
@@ -377,13 +385,18 @@ async fn model_logits(x: Vec<f32>) -> u32 {
             Instantiable::instantiate((store, "logits".to_string())).expect("x2 tensor");
         let x: Tensor<false, f32, V<EMBED>, VecStore<f32>> = Tensor { store: x };
         rmsnorm(&mut x2, &x, &output_norm, 1e-5);
-        unsafe { matmul(&mut logits, &output, &x2) }
+        unsafe { Matmul::matmul(&mut logits, &output, &x2) }
         max(&logits).0 as u32
     })
 }
 
 #[ic_cdk::update]
 async fn model_forward(token: u32, pos: u32) -> u32 {
+    model_forward_timed(token, pos).await.0
+}
+
+#[ic_cdk::update]
+async fn model_forward_timed(token: u32, pos: u32) -> (u32, Vec<Timing>) {
     check_owner!();
     assert!(token < VOCAB as u32);
     let blocks = BLOCKS.with(|blocks| {
@@ -406,19 +419,23 @@ async fn model_forward(token: u32, pos: u32) -> u32 {
         }
         x
     });
+    let mut timing: Vec<Timing> = vec![];
     for (i, block) in blocks.iter().enumerate() {
+        let n_block = (i - 1) as u32;
         if i > 0 {
             let (res,): (Vec<f32>,) =
-                ic_cdk::call(*block, "model_block_forward", (i as u32 - 1, x, pos))
+                ic_cdk::call(*block, "model_block_forward", (n_block, x, pos))
                     .await
                     .expect("vector");
+            timing.push(Timing { step: n_block.to_string(), time: ic_cdk::api::time()});
             x = res
         }
     }
     let (predicted,): (u32,) = ic_cdk::call(blocks[0], "model_logits", (x,))
         .await
         .expect("logits");
-    predicted
+    timing.push(Timing { step: "logits".to_string(), time: ic_cdk::api::time()});
+    (predicted, timing)
 }
 
 #[ic_cdk::update]
