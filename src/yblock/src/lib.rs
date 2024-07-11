@@ -9,7 +9,7 @@ use tokenizers::tokenizer::Tokenizer;
 use yllama::llama::*;
 use yllama::llm::*;
 use ymath::tensor::*;
-use ymath::{matmul, max, rmsnorm};
+use ymath::{Matmul, max, rmsnorm};
 
 type YLlamaState<T> = HashMap<String, (Vec<u32>, RefCell<Vec<T>>)>;
 type YBytes = HashMap<String, Vec<u8>>;
@@ -368,6 +368,7 @@ async fn model_decode(input: String) -> Vec<u32> {
 async fn model_logits(x: Vec<f32>) -> u32 {
     check_owner!();
     assert!(x.len() == EMBED);
+    
     STORE.with(|store| {
         let mut borrow = store.borrow_mut();
         let store = borrow.deref_mut();
@@ -384,7 +385,7 @@ async fn model_logits(x: Vec<f32>) -> u32 {
             Instantiable::instantiate((store, "logits".to_string())).expect("x2 tensor");
         let x: Tensor<false, f32, V<EMBED>, VecStore<f32>> = Tensor { store: x };
         rmsnorm(&mut x2, &x, &output_norm, 1e-5);
-        unsafe { matmul(&mut logits, &output, &x2) }
+        unsafe { Matmul::matmul(&mut logits, &output, &x2) }
         max(&logits).0 as u32
     })
 }
