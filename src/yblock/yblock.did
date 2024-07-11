@@ -1,6 +1,7 @@
 service : {
     "model_block_forward": (nat32, vec float32, nat32) -> (vec float32);
     "model_forward": (nat32, nat32) -> (nat32);
+    "model_forward_timed": (nat32, nat32) -> (nat32, vec record { step: text; time: nat64 });
     "model_set_blocks": (vec principal) -> ();
     "model_get_blocks": () -> (vec principal) query;
     "model_tokenize": (text) -> (vec nat32) query;

@@ -33,6 +33,12 @@ struct Descr {
     shape: Vec<u32>,
 }
 
+#[derive(CandidType, Deserialize, Debug)]
+struct Timing {
+    step: String,
+    time: u64,
+}
+
 async fn model_set_blocks(canister: &Canister<'_>, blocks: &Vec<Principal>) -> () {
     let caller: AsyncCaller<()> = canister
         .update("model_set_blocks")
@@ -161,13 +167,13 @@ async fn _model_block_forward(canister: &Canister<'_>, block: u32, x: &mut Vec<f
     *x = vec
 }
 
-async fn model_forward(canister: &Canister<'_>, token: u32, pos: u32) -> u32 {
-    let caller: AsyncCaller<(u32,)> = canister
-        .update("model_forward")
+async fn model_forward_timed(canister: &Canister<'_>, token: u32, pos: u32) -> (u32, Vec<Timing>) {
+    let caller: AsyncCaller<(u32, Vec<Timing>)> = canister
+        .update("model_forward_timed")
         .with_args((token, pos))
         .build();
-    let (predicted,): (u32,) = caller.call_and_wait().await.expect("call");
-    predicted
+    let (predicted, timing): (u32, Vec<Timing>) = caller.call_and_wait().await.expect("call");
+    (predicted, timing)
 }
 
 async fn block_new_tensors(canister: &Canister<'_>, i: usize) {
@@ -508,8 +514,9 @@ async fn main() {
         let token = args.token.expect("token");
         print!("Token input: {}", token);
         let _ = std::io::stdout().flush();
-        let predicted = model_forward(&canister, token, pos).await;
+        let (predicted, timing) = model_forward_timed(&canister, token, pos).await;
         println!("\rToken input: {} predicted: {}", token, predicted);
+        println!("Timing {:?}", timing);
     }
 
     println!("\n<<< done");

@@ -6,6 +6,9 @@ edition = "2021"
 [build]
 target = "wasm32-unknown-unknown"
 
+[target.wasm32-unknown-unknown]
+rustflags = ["-Ctarget-feature=+simd128"]
+
 [lib]
 crate-type = ["cdylib"]
 
